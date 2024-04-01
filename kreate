@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+
+import argparse
+import subprocess
+import httpx
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("-k", "--k3s-version", type=str, default="stable", help="k3s version in its own format")
+parser.add_argument("-p", "--profile", type=str, default="test", help="colima profile name")
+parser.add_argument("action",  choices=["start","stop","delete"], help="start/stop/delete")
+
+args = parser.parse_args()
+
+command = ["colima"]
+command.append(args.action)
+command.append("-p")
+command.append(args.profile)
+
+if args.action == "start":
+    K3S_CHANNEL_URL="https://update.k3s.io/v1-release/channels/"+args.k3s_version
+    contents = httpx.get(K3S_CHANNEL_URL, follow_redirects=False)
+
+    kversion=""
+    if contents.status_code == 302:
+        kversion = contents.text.split("tag/")[1].split('"')[0]
+    else:
+        print("Check your k3s version string")
+        print(args.k3s_version)
+        exit(1)
+    command += ("--cpu 4 --memory 8 --kubernetes --kubernetes-disable traefik".split())
+    command += ["--kubernetes-version",kversion]
+    command.append("--network-address")
+
+print(" ".join(command))
+subprocess.run(command)
+if args.action == "start":
+    subprocess.run(["kubectl", "config", "rename-context", "colima-"+args.profile, args.profile] )
+# if args.action == "delete":
+#     subprocess.run(["kubectl", "config", "delete-context", args.profile])
+
